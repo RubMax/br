@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Liste de Tâches</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f8f9fa;
+      padding: 20px;
+      max-width: 700px;
+      margin: auto;
+    }
+
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+
+    #taskInput, #prioritySelect, #dateInput, #reminderTimeInput, #searchInput {
+      padding: 10px;
+      margin: 5px 5px 10px 0;
+    }
+
+    #taskInput { width: 30%; }
+    #prioritySelect, #dateInput, #reminderTimeInput { width: 15%; }
+
+    button {
+      padding: 10px 15px;
+      cursor: pointer;
+    }
+
+    .task {
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      margin-top: 10px;
+      padding: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .task.completed span {
+      text-decoration: line-through;
+      color: #6c757d;
+    }
+
+    .priority-high {
+      background-color: #ffe5e5;
+      border-left: 5px solid red;
+    }
+
+    .priority-medium {
+      background-color: #fff9e5;
+      border-left: 5px solid orange;
+    }
+
+    .priority-low {
+      background-color: #e5ffe5;
+      border-left: 5px solid green;
+    }
+
+    .buttons {
+      display: flex;
+      gap: 10px;
+    }
+
+    .info {
+      font-size: 0.9em;
+      color: #777;
+    }
+
+    .filter-section {
+      margin-top: 20px;
+      margin-bottom: 10px;
+    }
+
+    .search-section {
+      margin-bottom: 10px;
+    }
+
+    button[disabled] {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+
+     .filter-section {
+      margin-top: 20px;
+      margin-bottom: 10px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .filter-section button {
+      padding: 8px 12px;
+      border-radius: 4px;
+      border: 1px solid #ddd;
+      background-color: #f0f0f0;
+    }
+
+    .filter-section button.active {
+      background-color: #317EFB;
+      color: white;
+      border-color: #317EFB;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>📋 Liste de Tâches</h1>
+
+  <div>
+    <input type="text" id="taskInput" placeholder="Entrez une tâche...">
+    <select id="prioritySelect">
+      <option value="low">🟢 Basse</option>
+      <option value="medium">🟡 Moyenne</option>
+      <option value="high">🔴 Haute</option>
+    </select>
+    <input type="date" id="dateInput" title="Date prévue pour accomplir la tâche">
+    <input type="time" id="reminderTimeInput" title="Heure de rappel">
+    <button onclick="addTask()">Ajouter</button>
+  </div>
+
+  <div class="search-section">
+    🔍 <input type="text" id="searchInput" placeholder="Rechercher une tâche..." oninput="loadTasks()">
+  </div>
+
+  <div class="filter-section">
+    <label for="filter">Filtrer :</label>
+    <select id="filter" onchange="loadTasks()">
+      <option value="all">Toutes</option>
+      <option value="done">Accomplies</option>
+      <option value="notDone">Non accomplies</option>
+    </select>
+  </div>
+
+  <div id="taskList"></div>
+
+  <!-- Modale de rappel -->
+  <div id="reminderModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); align-items:center; justify-content:center; z-index:9999;">
+    <div style="background:white; padding:20px; border-radius:12px; max-width:400px; width:90%; text-align:center; box-shadow:0 4px 12px rgba(0,0,0,0.2);">
+      <h2>⏰ Rappel de Tâche</h2>
+      <p id="reminderText" style="margin-top:10px;"></p>
+      <button onclick="closeModal()" style="margin-top:20px; padding:10px 20px;">Fermer</button>
+    </div>
+  </div>
+
+  <script>
+    const taskListElement = document.getElementById('taskList');
+
+    if (Notification.permission !== 'granted') {
+      Notification.requestPermission();
+    }
+
+    function getFormattedDate() {
+      const now = new Date();
+      const day = String(now.getDate()).padStart(2, '0');
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const year = now.getFullYear();
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      return `${day}/${month}/${year} ${hours}:${minutes}`;
+    }
+
+    function loadTasks() {
+      const filter = document.getElementById('filter').value;
+      const search = document.getElementById('searchInput').value.toLowerCase();
+      let tasks = JSON.parse(localStorage.getItem('tasks')) || [];
+
+      tasks.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+      if (filter === 'done') {
+        tasks = tasks.filter(task => task.done);
+      } else if (filter === 'notDone') {
+        tasks = tasks.filter(task => !task.done);
+      }
+
+      if (search) {
+        tasks = tasks.filter(task => task.text.toLowerCase().includes(search));
+      }
+
+      taskListElement.innerHTML = '';
+      tasks.forEach(task => {
+        const taskDiv = document.createElement('div');
+        taskDiv.className = `task ${task.done ? 'completed' : ''} priority-${task.priority}`;
+        taskDiv.innerHTML = `
+          <div>
+            <span><strong>${task.id}.</strong> ${task.text}</span><br>
+            <span class="info">Ajoutée le : ${task.date}</span><br>
+            <span class="info">Prévue pour : ${task.plannedDate || 'Non spécifiée'} à ${task.reminderTime || 'N/A'}</span>
+          </div>
+          <div class="buttons">
+            <button onclick="toggleDone(${task.id})">${task.done ? 'Désaccomplie' : 'Accomplie'}</button>
+            <button onclick="deleteTask(${task.id})" ${!task.done ? 'disabled title="Terminez d\'abord cette tâche pour la supprimer"' : ''}>Supprimer</button>
+          </div>
+        `;
+        taskListElement.appendChild(taskDiv);
+      });
+    }
+
+    function addTask() {
+      const input = document.getElementById('taskInput');
+      const priority = document.getElementById('prioritySelect').value;
+      const plannedDate = document.getElementById('dateInput').value;
+      const reminderTime = document.getElementById('reminderTimeInput').value;
+      const text = input.value.trim();
+
+      if (text) {
+        const tasks = JSON.parse(localStorage.getItem('tasks')) || [];
+        const nextId = tasks.length > 0 ? Math.max(...tasks.map(t => t.id)) + 1 : 1;
+        const now = new Date();
+        const newTask = {
+          id: nextId,
+          text: text,
+          priority: priority,
+          done: false,
+          date: getFormattedDate(),
+          plannedDate: plannedDate || null,
+          reminderTime: reminderTime || null,
+          notifiedTimes: [],
+          timestamp: now.toISOString()
+        };
+        tasks.push(newTask);
+        localStorage.setItem('tasks', JSON.stringify(tasks));
+        input.value = '';
+        document.getElementById('dateInput').value = '';
+        document.getElementById('reminderTimeInput').value = '';
+        loadTasks();
+      }
+    }
+
+    function toggleDone(taskId) {
+      const tasks = JSON.parse(localStorage.getItem('tasks'));
+      const index = tasks.findIndex(t => t.id === taskId);
+      if (index !== -1) {
+        tasks[index].done = !tasks[index].done;
+        localStorage.setItem('tasks', JSON.stringify(tasks));
+        loadTasks();
+      }
+    }
+
+    function deleteTask(taskId) {
+      let tasks = JSON.parse(localStorage.getItem('tasks'));
+      const task = tasks.find(t => t.id === taskId);
+      if (!task || !task.done) return;
+      tasks = tasks.filter(t => t.id !== taskId);
+      localStorage.setItem('tasks', JSON.stringify(tasks));
+      loadTasks();
+    }
+
+    function showNotification(taskText) {
+      if (Notification.permission === "granted") {
+        new Notification("🔔 Rappel de tâche", {
+          body: `📌 Tâche à faire : ${taskText}`,
+          icon: "https://cdn-icons-png.flaticon.com/512/190/190411.png"
+        });
+      }
+
+      document.getElementById("reminderText").textContent = taskText;
+      document.getElementById("reminderModal").style.display = "flex";
+    }
+
+    function closeModal() {
+      document.getElementById("reminderModal").style.display = "none";
+    }
+
+    function checkReminders() {
+      const now = new Date();
+      const today = now.toISOString().split("T")[0];
+      const currentHour = now.getHours();
+      const currentMinute = now.getMinutes();
+
+      const tasks = JSON.parse(localStorage.getItem('tasks')) || [];
+      let updated = false;
+
+      tasks.forEach(task => {
+        if (task.done || task.plannedDate !== today || !task.reminderTime) return;
+
+        const [reminderHour, reminderMinute] = task.reminderTime.split(':').map(Number);
+        const diffMinutes = (currentHour * 60 + currentMinute) - (reminderHour * 60 + reminderMinute);
+
+        if (diffMinutes >= 0 && diffMinutes % 30 === 0) {
+          const key = `${currentHour}:${String(currentMinute).padStart(2, '0')}`;
+          if (!task.notifiedTimes.includes(key)) {
+            showNotification(task.text);
+            task.notifiedTimes.push(key);
+            updated = true;
+          }
+        }
+      });
+
+      if (updated) {
+        localStorage.setItem('tasks', JSON.stringify(tasks));
+      }
+    }
+
+    loadTasks();
+    setInterval(checkReminders, 60000);
+  </script>
+</body>
+</html>
